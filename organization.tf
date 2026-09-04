@@ -17,3 +17,12 @@ resource "mist_org_sitegroup" "wlan_guest" {
   name   = "WLAN-Guest"
 }
 
+resource "mist_org_sitegroup" "wan_hubs" {
+  org_id = mist_org.demo.id
+  name   = "WAN-Hubs"
+}
+
+resource "mist_org_sitegroup" "wan_spokes" {
+  org_id = mist_org.demo.id
+  name   = "WAN-Spokes"
+}

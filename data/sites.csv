@@ -1,4 +1,8 @@
-site_key,name,address,country_code,timezone,vlan_guest,vlan_user,vlan_admin,vlan_vip,vlan_mgmt
-paris,Paris Demo,"41 Rue de Villiers, 92200 Neuilly-sur-Seine, France",FR,Europe/Paris,100,120,130,140,199
-lyon,Lyon Demo,"2 Place Bellecour, 69002 Lyon, France",FR,Europe/Paris,200,220,230,240,299
-
+site_key,name,address,country_code,timezone,role,site_network_id,dc_lan_gateway,wan1_ip,wan1_prefix,wan1_gateway,wan2_ip,wan2_prefix,wan2_gateway,vlan_guest,vlan_user,vlan_admin,vlan_vip,vlan_mgmt
+paris,Paris Demo,"41 Rue de Villiers, 92200 Neuilly-sur-Seine, France",FR,Europe/Paris,spoke,10,,,,,,,100,120,130,140,199
+lyon,Lyon Demo,"2 Place Bellecour, 69002 Lyon, France",FR,Europe/Paris,spoke,20,,,,,,,200,220,230,240,299
+london,London Demo,"30 St Mary Axe, London EC3A 8BF, United Kingdom",GB,Europe/London,spoke,30,,,,,,,300,320,330,340,399
+madrid,Madrid Demo,"Plaza de Espana, 28008 Madrid, Spain",ES,Europe/Madrid,spoke,40,,,,,,,400,420,430,440,499
+milan,Milan Demo,"Piazza Gae Aulenti, 20154 Milano, Italy",IT,Europe/Rome,spoke,50,,,,,,,500,520,530,540,599
+paris-dc,Paris DC,"25 Rue du General Foy, 75008 Paris, France",FR,Europe/Paris,hub,,10.200.10.1,192.0.2.10,24,192.0.2.1,198.51.100.10,24,198.51.100.1,,,,,
+frankfurt-dc,Frankfurt DC,"Gutleutstrasse 310, 60327 Frankfurt am Main, Germany",DE,Europe/Berlin,hub,,10.200.20.1,192.0.2.20,24,192.0.2.1,198.51.100.20,24,198.51.100.1,,,,,
