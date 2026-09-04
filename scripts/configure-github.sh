@@ -18,8 +18,8 @@ gh api \
   "required_status_checks": {
     "strict": true,
     "contexts": [
-      "Terraform / Trusted PR source",
-      "Terraform / Terraform"
+      "Trusted PR source",
+      "Terraform"
     ]
   },
   "enforce_admins": true,
