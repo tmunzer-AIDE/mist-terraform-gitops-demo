@@ -6,6 +6,7 @@ provider "registry.terraform.io/juniper/mist" {
   constraints = "~> 0.10.0"
   hashes = [
     "h1:6JSvNI8HB6YxqFx4yBAQ7OKLfEvkRbciPzCyig93Vx0=",
+    "h1:Kj2vZ1tvA6CDMsBshWpJnRi/fGO8buO6E8oYVYvsggY=",
     "zh:19fc62bd3bdc3977557ba065ee0373146d4623866c02840db11f126c4ab0bea7",
     "zh:3456fc83630f83b943daf73e571a97242232b31a5c644349e0390f4cc138a4c9",
     "zh:5c6fe31456f51fb98bb2574c2712610d11c70e4d8ae8baae3b47187bb69ddd9c",
