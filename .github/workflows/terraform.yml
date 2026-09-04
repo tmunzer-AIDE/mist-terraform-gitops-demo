@@ -7,6 +7,16 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      operation:
+        description: Terraform operation to run against main
+        required: true
+        default: plan
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
 
 permissions:
   contents: read
@@ -22,7 +32,7 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - name: Reject fork pull requests
+      - name: Validate workflow source
         env:
           HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
         shell: bash
@@ -32,16 +42,23 @@ jobs:
             exit 1
           fi
 
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "::error::Manual Terraform operations must run from main."
+            exit 1
+          fi
+
   terraform:
     name: Terraform
     needs: trusted-source
     if: needs.trusted-source.result == 'success'
     runs-on: [self-hosted, mist-terraform-demo]
     timeout-minutes: 30
+    environment: mist-production
 
     env:
       MIST_API_TOKEN: ${{ secrets.MIST_APITOKEN }}
       MIST_HOST: ${{ vars.MIST_HOST }}
+      TF_OPERATION: ${{ github.event_name == 'workflow_dispatch' && inputs.operation || 'plan' }}
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
 
@@ -71,7 +88,7 @@ jobs:
         run: terraform fmt -check -recursive
 
       - name: Initialize Terraform
-        run: terraform init -input=false -backend-config="path=${TF_STATE_PATH}"
+        run: terraform init -input=false -lockfile=readonly -backend-config="path=${TF_STATE_PATH}"
 
       - name: Validate configuration
         run: terraform validate
@@ -79,9 +96,15 @@ jobs:
       - name: Plan
         shell: bash
         run: |
-          terraform plan -no-color -lock-timeout=5m -out="$RUNNER_TEMP/mist.tfplan" | tee plan.txt
+          umask 077
+          plan_args=()
+          if [[ "$TF_OPERATION" == "destroy" ]]; then
+            plan_args+=("-destroy")
+          fi
+
+          terraform plan "${plan_args[@]}" -no-color -lock-timeout=5m -out="$RUNNER_TEMP/mist.tfplan" | tee plan.txt
           {
-            echo "## Terraform plan"
+            echo "## Terraform ${TF_OPERATION} plan"
             echo
             echo '```text'
             sed -n '1,500p' plan.txt
@@ -89,13 +112,24 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Back up state
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'workflow_dispatch' && inputs.operation != 'plan'
         shell: bash
         run: |
+          umask 077
           if [[ -f "$TF_STATE_PATH" ]]; then
             cp "$TF_STATE_PATH" "${TF_STATE_PATH}.$(date -u +%Y%m%dT%H%M%SZ).backup"
           fi
 
       - name: Apply
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: terraform apply -no-color -lock-timeout=5m -auto-approve "$RUNNER_TEMP/mist.tfplan"
+        if: github.event_name == 'workflow_dispatch' && inputs.operation != 'plan'
+        run: |
+          umask 077
+          terraform apply -no-color -lock-timeout=5m -auto-approve "$RUNNER_TEMP/mist.tfplan"
+
+      - name: Protect state files
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${TF_STATE_PATH:-}" && -d "$(dirname "$TF_STATE_PATH")" ]]; then
+            find "$(dirname "$TF_STATE_PATH")" -maxdepth 1 -type f -exec chmod 600 {} +
+          fi
