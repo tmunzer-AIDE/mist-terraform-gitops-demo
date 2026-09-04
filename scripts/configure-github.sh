@@ -17,7 +17,10 @@ gh api \
 {
   "required_status_checks": {
     "strict": true,
-    "contexts": ["Terraform / Terraform"]
+    "contexts": [
+      "Terraform / Trusted PR source",
+      "Terraform / Terraform"
+    ]
   },
   "enforce_admins": true,
   "required_pull_request_reviews": {
@@ -38,4 +41,3 @@ gh api \
 JSON
 
 echo "Protected ${repository}:main with one approval and the Terraform check."
-

@@ -29,13 +29,13 @@ The workflow serializes all Terraform operations. State is stored under
 outside the Actions checkout, so checkout cleanup cannot remove it.
 
 > [!IMPORTANT]
-> Use a private repository with trusted collaborators. Terraform plans can
-> execute provider code, and pull requests run on your self-hosted machine.
-> Do not expose this workflow to untrusted or public fork pull requests.
+> Terraform plans can execute provider code. Only same-repository branches
+> created by trusted collaborators are allowed onto the self-hosted runner.
+> Fork pull requests are rejected before their code reaches the Mac.
 
 ## Prerequisites
 
-- A GitHub repository with branch protection available
+- A public GitHub repository, or a private repository on GitHub Pro
 - A dedicated self-hosted GitHub Actions runner
 - Terraform 1.15.7 on developer workstations
 - A Mist API token with permission to manage the demo organization
@@ -48,14 +48,16 @@ git init -b main
 git add .
 git commit -m "Initial Mist Terraform GitOps demo"
 gh repo create OWNER/mist-terraform-gitops-demo \
-  --private \
+  --public \
   --source=. \
   --remote=origin \
   --push
 ```
 
-Keep the repository private because its pull-request workflow uses a
-self-hosted runner and Mist credentials.
+GitHub Free only provides branch protection for public repositories. This demo
+therefore rejects every fork pull request on a GitHub-hosted runner before any
+job can reach the self-hosted Mac. Only branches created in the repository by
+trusted collaborators can run Terraform.
 
 ## 2. Register the self-hosted runner
 
@@ -100,11 +102,16 @@ chmod +x scripts/configure-github.sh
 This requires:
 
 - one approving review, including approval by someone other than the last pusher;
-- the `Terraform / Terraform` status check to pass;
+- the trusted-source gate and Terraform status checks to pass;
 - all conversations to be resolved;
 - linear history, with force pushes and branch deletion disabled.
 
 Repository administrators are also subject to these rules.
+
+The trusted-source gate is defined in the default branch and triggered with
+`pull_request_target`. It never checks out or executes fork content. After the
+gate approves a same-repository branch, the Terraform job explicitly checks out
+that branch's commit.
 
 ## 5. Run the demo
 
@@ -148,4 +155,3 @@ remain in Mist and can be imported into a replacement state.
 
 For a multi-runner or production deployment, replace the local backend with HCP
 Terraform or another remote backend that provides durable storage and locking.
-
