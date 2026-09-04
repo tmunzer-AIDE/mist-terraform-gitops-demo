@@ -1,0 +1,82 @@
+name: Terraform
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mist-terraform-local-state
+  cancel-in-progress: false
+
+jobs:
+  terraform:
+    name: Terraform
+    runs-on: [self-hosted, mist-terraform-demo]
+    timeout-minutes: 30
+
+    env:
+      MIST_APITOKEN: ${{ secrets.MIST_APITOKEN }}
+      MIST_HOST: ${{ vars.MIST_HOST }}
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.7
+          terraform_wrapper: false
+
+      - name: Select persistent local state
+        shell: bash
+        run: |
+          state_root="${TF_STATE_DIR:-$HOME/.local/state/mist-terraform-demo}"
+          state_dir="${state_root}/${GITHUB_REPOSITORY//\//-}"
+          mkdir -p "$state_dir"
+          chmod 700 "$state_dir"
+          echo "TF_STATE_PATH=$state_dir/terraform.tfstate" >> "$GITHUB_ENV"
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+
+      - name: Initialize Terraform
+        run: terraform init -input=false -backend-config="path=${TF_STATE_PATH}"
+
+      - name: Validate configuration
+        run: terraform validate
+
+      - name: Plan
+        shell: bash
+        run: |
+          terraform plan -no-color -lock-timeout=5m -out="$RUNNER_TEMP/mist.tfplan" | tee plan.txt
+          {
+            echo "## Terraform plan"
+            echo
+            echo '```text'
+            sed -n '1,500p' plan.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Back up state
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          if [[ -f "$TF_STATE_PATH" ]]; then
+            cp "$TF_STATE_PATH" "${TF_STATE_PATH}.$(date -u +%Y%m%dT%H%M%SZ).backup"
+          fi
+
+      - name: Apply
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: terraform apply -no-color -lock-timeout=5m -auto-approve "$RUNNER_TEMP/mist.tfplan"
+
