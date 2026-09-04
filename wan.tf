@@ -270,12 +270,12 @@ resource "mist_org_gatewaytemplate" "branch" {
       }
 
       vpn_paths = {
-        "DC-Paris-Hub-WAN1.Corporate-Overlay" = {
+        (format("%s-WAN1.%s", local.hub_profiles.paris.name, local.overlay_name)) = {
           role        = "spoke"
           bfd_profile = "broadband"
           preference  = 10
         }
-        "DC-Frankfurt-Hub-WAN1.Corporate-Overlay" = {
+        (format("%s-WAN1.%s", local.hub_profiles.frankfurt.name, local.overlay_name)) = {
           role        = "spoke"
           bfd_profile = "broadband"
           preference  = 20
