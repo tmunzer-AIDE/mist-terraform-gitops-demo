@@ -1,12 +1,70 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 1 ]]; then
-  echo "Usage: $0 OWNER/REPOSITORY" >&2
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "Usage: $0 OWNER/REPOSITORY [ENVIRONMENT_REVIEWER]" >&2
   exit 2
 fi
 
 repository="$1"
+reviewer="${2:-}"
+visibility="$(gh api "repos/${repository}" --jq .visibility)"
+
+gh api \
+  --method PUT \
+  "repos/${repository}/actions/permissions" \
+  --input - <<'JSON'
+{
+  "enabled": true,
+  "allowed_actions": "selected",
+  "sha_pinning_required": true
+}
+JSON
+
+gh api \
+  --method PUT \
+  "repos/${repository}/actions/permissions/selected-actions" \
+  --input - <<'JSON'
+{
+  "github_owned_allowed": true,
+  "verified_allowed": true,
+  "patterns_allowed": []
+}
+JSON
+
+if [[ "$visibility" == "private" && -z "$reviewer" ]]; then
+  gh api \
+    --method PUT \
+    "repos/${repository}/environments/mist-production" \
+    --input - <<'JSON'
+{}
+JSON
+
+  echo "Configured ${repository} for pinned Actions and manual Terraform operations."
+  echo "GitHub Free does not enforce branch or environment protection on private repositories."
+  exit 0
+fi
+
+if [[ -z "$reviewer" ]]; then
+  echo "ENVIRONMENT_REVIEWER is required for a public repository." >&2
+  exit 2
+fi
+
+reviewer_id="$(gh api "users/${reviewer}" --jq .id)"
+
+gh api \
+  --method PUT \
+  "repos/${repository}/environments/mist-production" \
+  --input - <<JSON
+{
+  "wait_timer": 0,
+  "prevent_self_review": true,
+  "reviewers": [
+    {"type": "User", "id": ${reviewer_id}}
+  ],
+  "deployment_branch_policy": null
+}
+JSON
 
 gh api \
   --method PUT \
@@ -40,4 +98,4 @@ gh api \
 }
 JSON
 
-echo "Protected ${repository}:main with one approval and the Terraform check."
+echo "Protected ${repository}:main and mist-production with reviewer ${reviewer}."

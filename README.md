@@ -1,12 +1,14 @@
 # Mist Terraform GitOps demo
 
-This repository demonstrates a complete GitOps workflow for the
+This template repository scaffolds a complete GitOps workflow for the
 [Juniper Mist Terraform provider](https://registry.terraform.io/providers/Juniper/mist/latest):
 
 - Mist configuration is reviewed as code.
 - Every pull request runs `fmt`, `validate`, and `plan`.
-- Protected `main` requires an approval and a successful Terraform check.
-- Merging to `main` creates a fresh plan and applies that exact saved plan.
+- When supported by the GitHub plan, protected `main` requires approval and a
+  successful Terraform check.
+- Merging to `main` creates a fresh plan without applying it.
+- Apply and destroy are explicit manual operations against `main`.
 - Terraform state remains local to a dedicated self-hosted runner.
 
 ## Architecture
@@ -15,8 +17,8 @@ This repository demonstrates a complete GitOps workflow for the
 flowchart LR
   Author[Feature branch] --> PR[Pull request]
   PR --> Plan[Terraform plan]
-  Plan --> Review[Plan review and approval]
-  Review --> Main[Protected main]
+  Plan --> Review[Plan review]
+  Review --> Main[Main branch]
   Main --> Apply[Terraform plan and apply]
   Plan --> Runner[Self-hosted runner]
   Apply --> Runner
@@ -66,77 +68,76 @@ two hub profiles and claim branch gateways into their sites when hardware is
 available.
 
 > [!IMPORTANT]
-> Terraform plans can execute provider code. Only same-repository branches
-> created by trusted collaborators are allowed onto the self-hosted runner.
-> Fork pull requests are rejected before their code reaches the Mac.
+> Terraform plans can execute provider code. Run the self-hosted runner in a
+> dedicated VM with no host-folder mounts or personal credentials. Only
+> same-repository branches created by trusted collaborators are allowed onto
+> that runner. Fork pull requests are rejected before their code reaches it.
 
 ## Prerequisites
 
-- A public GitHub repository, or a private repository on GitHub Pro
-- A dedicated self-hosted GitHub Actions runner
+- A repository generated from this GitHub template
+- A dedicated VM hosting a repository-scoped GitHub Actions runner
 - Terraform 1.15.7 on developer workstations
 - A Mist API token with permission to manage the demo organization
-- A second GitHub user or collaborator who can approve pull requests
+- For enforced protections, a second GitHub user who can approve deployments
 
-## 1. Create and push the repository
+## 1. Generate the demo repository
 
 ```bash
-git init -b main
-git add .
-git commit -m "Initial Mist Terraform GitOps demo"
-gh repo create OWNER/mist-terraform-gitops-demo \
-  --public \
-  --source=. \
-  --remote=origin \
-  --push
+gh repo create OWNER/mist-terraform-demo-private \
+  --private \
+  --template tmunzer-AIDE/mist-terraform-gitops-demo
 ```
 
-GitHub Free only provides branch protection for public repositories. This demo
-therefore rejects every fork pull request on a GitHub-hosted runner before any
-job can reach the self-hosted Mac. Only branches created in the repository by
-trusted collaborators can run Terraform.
+Template repository settings, secrets, runners, environments, and Terraform
+state are intentionally not copied. Configure each generated repository
+independently.
+
+GitHub Free does not enforce branch protection or required environment reviewers
+for private repositories. Apply and destroy are therefore manual operations;
+they never run automatically after a push or merge. A public repository, or a
+private repository on GitHub Pro, can additionally enforce the included branch
+and environment protections.
 
 ## 2. Register the self-hosted runner
 
 In the repository, open **Settings > Actions > Runners > New self-hosted
-runner** and follow GitHub's commands. Add the custom label
-`mist-terraform-demo`, then install the runner as a service so its working
-directory and state survive logouts and reboots.
+runner** and follow GitHub's commands from the dedicated VM. Add the custom
+label `mist-terraform-demo`, then install the runner as a service so its
+working directory and state survive reboots:
+
+```bash
+sudo ./svc.sh install actions-runner
+sudo ./svc.sh start
+sudo ./svc.sh status
+```
 
 Run only one runner with this label. The workflow also uses a concurrency group
 and Terraform state locking to prevent overlapping plans and applies.
 
+The VM must not mount host directories or contain personal SSH, GitHub, cloud,
+or browser credentials. Only outbound network access is required.
+
 To use another persistent state directory, define `TF_STATE_DIR` for the runner
 service account. The default is `~/.local/state/mist-terraform-demo`.
 
-## 3. Configure Mist credentials
+## 3. Configure repository protections
 
-Create the non-sensitive Mist host as a repository variable:
-
-```bash
-gh variable set MIST_HOST --body "api.mist.com"
-```
-
-Create the API token as an encrypted repository secret:
-
-```bash
-gh secret set MIST_APITOKEN
-```
-
-The workflow exposes the secret to the provider as `MIST_API_TOKEN`. No
-credentials are stored in Terraform files or state.
-
-## 4. Protect `main`
-
-After the initial workflow has completed on `main`, apply the included branch
-protection:
+Configure pinned Actions and the `mist-production` environment:
 
 ```bash
 chmod +x scripts/configure-github.sh
-./scripts/configure-github.sh OWNER/mist-terraform-gitops-demo
+./scripts/configure-github.sh OWNER/mist-terraform-demo-private
 ```
 
-This requires:
+For public repositories or private repositories on GitHub Pro, pass the GitHub
+username that must approve runner jobs:
+
+```bash
+./scripts/configure-github.sh OWNER/REPOSITORY REVIEWER
+```
+
+This additionally requires:
 
 - one approving review, including approval by someone other than the last pusher;
 - the trusted-source gate and Terraform status checks to pass;
@@ -148,7 +149,29 @@ Repository administrators are also subject to these rules.
 The trusted-source gate is defined in the default branch and triggered with
 `pull_request_target`. It never checks out or executes fork content. After the
 gate approves a same-repository branch, the Terraform job explicitly checks out
-that branch's commit.
+that branch's commit. Public or GitHub Pro repositories also wait for approval
+of the `mist-production` environment before dispatching to the runner.
+
+## 4. Configure Mist credentials
+
+Create the non-sensitive Mist host as a repository variable:
+
+```bash
+gh variable set MIST_HOST \
+  --repo OWNER/mist-terraform-demo-private \
+  --body "api.mist.com"
+```
+
+Create the API token as an encrypted repository secret:
+
+```bash
+gh secret set MIST_APITOKEN \
+  --repo OWNER/mist-terraform-demo-private \
+  --env mist-production
+```
+
+The workflow exposes the secret to the provider as `MIST_API_TOKEN`. No
+credentials are stored in Terraform files or state.
 
 ## 5. Run the demo
 
@@ -165,9 +188,22 @@ gh pr create --fill
 
 1. Open the workflow run and show the Terraform plan in its job summary.
 2. Review and approve the pull request with the collaborator account.
-3. Merge the pull request.
-4. Open the `main` workflow run and show the fresh plan followed by apply.
-5. Confirm the new site and inherited templates in the Mist UI.
+3. Merge the pull request and show the fresh `main` plan.
+4. Manually apply that revision:
+
+   ```bash
+   gh workflow run Terraform \
+     --repo OWNER/mist-terraform-demo-private \
+     --ref main \
+     -f operation=apply
+   ```
+
+5. Open the manual workflow run and show the plan followed by apply.
+6. Confirm the new site and inherited templates in the Mist UI.
+
+To remove the complete demo, manually dispatch the workflow with
+`operation=destroy`. Review the destruction plan before approving the
+`mist-production` deployment.
 
 ## Local development
 
