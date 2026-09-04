@@ -28,6 +28,43 @@ The workflow serializes all Terraform operations. State is stored under
 `~/.local/state/mist-terraform-demo/<owner>-<repository>/terraform.tfstate`,
 outside the Actions checkout, so checkout cleanup cannot remove it.
 
+## Managed Mist topology
+
+```mermaid
+flowchart LR
+  subgraph Branches
+    Paris[Paris]
+    Lyon[Lyon]
+    London[London]
+    Madrid[Madrid]
+    Milan[Milan]
+  end
+
+  subgraph Corporate-Overlay
+    P1[Paris DC WAN1]
+    P2[Paris DC WAN2]
+    F1[Frankfurt DC WAN1]
+    F2[Frankfurt DC WAN2]
+  end
+
+  Branches --> P1
+  Branches --> P2
+  Branches --> F1
+  Branches --> F2
+```
+
+The WAN configuration creates:
+
+- five branch sites using a shared dual-WAN spoke gateway template;
+- Paris and Frankfurt DC sites with dedicated hub gateway profiles;
+- a four-path `Corporate-Overlay` hub-and-spoke VPN;
+- parameterized branch LAN addressing and DHCP using site variables;
+- service policies for branch-to-DC, DC-to-branch, and local internet traffic.
+
+Gateway inventory is intentionally not claimed. Assign real hub gateways to the
+two hub profiles and claim branch gateways into their sites when hardware is
+available.
+
 > [!IMPORTANT]
 > Terraform plans can execute provider code. Only same-repository branches
 > created by trusted collaborators are allowed onto the self-hosted runner.
