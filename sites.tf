@@ -23,6 +23,13 @@ resource "mist_site" "demo" {
   gatewaytemplate_id = each.value.role == "spoke" ? mist_org_gatewaytemplate.branch.id : null
   networktemplate_id = each.value.role == "spoke" ? mist_org_networktemplate.campus.id : null
   rftemplate_id      = each.value.role == "spoke" ? mist_org_rftemplate.campus.id : null
+
+  lifecycle {
+    precondition {
+      condition     = contains(["hub", "spoke"], each.value.role)
+      error_message = "Site ${each.key} has unsupported role '${each.value.role}'. Expected 'hub' or 'spoke'."
+    }
+  }
 }
 
 resource "mist_site_setting" "demo" {
