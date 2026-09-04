@@ -86,8 +86,8 @@ Create the API token as an encrypted repository secret:
 gh secret set MIST_APITOKEN
 ```
 
-The provider reads these as `MIST_HOST` and `MIST_APITOKEN`. No credentials are
-stored in Terraform files or state.
+The workflow exposes the secret to the provider as `MIST_API_TOKEN`. No
+credentials are stored in Terraform files or state.
 
 ## 4. Protect `main`
 
